@@ -31,7 +31,7 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 GMAIL_ADDRESS = st.secrets.get("GMAIL_ADDRESS", "")
 GMAIL_APP_PASSWORD = st.secrets.get("GMAIL_APP_PASSWORD", "")
 
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-3.8-flash"
 
 
 # -----------------------------
