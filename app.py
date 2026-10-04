@@ -1,3 +1,4 @@
+import time
 import streamlit as st
 import smtplib
 from email.mime.text import MIMEText
@@ -31,6 +32,7 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 GMAIL_ADDRESS = st.secrets.get("GMAIL_ADDRESS", "")
 GMAIL_APP_PASSWORD = st.secrets.get("GMAIL_APP_PASSWORD", "")
 
+# Primary model
 MODEL_NAME = "gemini-3.8-flash"
 
 
@@ -107,9 +109,7 @@ if not st.session_state.onboarded:
         elif not GEMINI_API_KEY:
 
             st.error(
-                "Gemini API key is not added yet. "
-                "You can add it later in "
-                ".streamlit/secrets.toml."
+                "Gemini API key is not added yet."
             )
 
         else:
@@ -170,22 +170,44 @@ else:
 
 
     # -----------------------------
-    # Gemini function
+    # Gemini function with retry
     # -----------------------------
 
     def ask_gemini(parts):
 
-        try:
+        max_attempts = 3
 
-            response = st.session_state.chat.send_message(
-                parts
-            )
+        for attempt in range(max_attempts):
 
-            return response.text
+            try:
 
-        except Exception as error:
+                response = st.session_state.chat.send_message(
+                    parts
+                )
 
-            return f"Sorry, something went wrong: {error}"
+                return response.text
+
+            except Exception as error:
+
+                error_text = str(error)
+
+                # Retry temporary server errors
+                if "503" in error_text or "UNAVAILABLE" in error_text:
+
+                    if attempt < max_attempts - 1:
+
+                        time.sleep(3)
+
+                        continue
+
+                    return (
+                        "Gemini is temporarily experiencing high demand. "
+                        "Please wait a moment and try again."
+                    )
+
+                return (
+                    f"Sorry, something went wrong: {error}"
+                )
 
 
     # -----------------------------
@@ -308,9 +330,7 @@ else:
             if not GMAIL_ADDRESS or not GMAIL_APP_PASSWORD:
 
                 st.error(
-                    "Gmail settings are not added yet. "
-                    "You can add them later in "
-                    ".streamlit/secrets.toml."
+                    "Gmail settings are not added yet."
                 )
 
             else:
