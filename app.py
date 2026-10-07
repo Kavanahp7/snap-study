@@ -1,4 +1,3 @@
-import time
 import streamlit as st
 import smtplib
 from email.mime.text import MIMEText
@@ -32,8 +31,7 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 GMAIL_ADDRESS = st.secrets.get("GMAIL_ADDRESS", "")
 GMAIL_APP_PASSWORD = st.secrets.get("GMAIL_APP_PASSWORD", "")
 
-# Primary model
-MODEL_NAME = "gemini-3.8-flash"
+MODEL_NAME = "gemini-flash-lite-latest"
 
 
 # -----------------------------
@@ -56,9 +54,7 @@ else:
 # -----------------------------
 
 def send_email(to_address, subject, body):
-
     message = MIMEText(body)
-
     message["Subject"] = subject
     message["From"] = GMAIL_ADDRESS
     message["To"] = to_address
@@ -77,6 +73,27 @@ if "onboarded" not in st.session_state:
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+
+# -----------------------------
+# Gemini function
+# -----------------------------
+
+def ask_gemini(parts):
+    try:
+        response = st.session_state.chat.send_message(parts)
+        return response.text
+
+    except Exception as error:
+        error_text = str(error)
+
+        if "503" in error_text or "UNAVAILABLE" in error_text:
+            return (
+                "Gemini is temporarily busy. "
+                "Please try your question again in a moment."
+            )
+
+        return "Sorry, something went wrong. Please try again."
 
 
 # -----------------------------
@@ -117,28 +134,34 @@ if not st.session_state.onboarded:
             st.session_state.name = name
             st.session_state.email = email
 
-            st.session_state.chat = gemini_client.chats.create(
-                model=MODEL_NAME,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_PROMPT
-                ),
-            )
+            try:
+                st.session_state.chat = gemini_client.chats.create(
+                    model=MODEL_NAME,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT
+                    ),
+                )
 
-            welcome_message = WELCOME_MESSAGE_TEMPLATE.format(
-                name=name
-            )
+                welcome_message = WELCOME_MESSAGE_TEMPLATE.format(
+                    name=name
+                )
 
-            st.session_state.messages.append(
-                {
-                    "role": "assistant",
-                    "kind": "text",
-                    "content": welcome_message,
-                }
-            )
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "kind": "text",
+                        "content": welcome_message,
+                    }
+                )
 
-            st.session_state.onboarded = True
+                st.session_state.onboarded = True
+                st.rerun()
 
-            st.rerun()
+            except Exception as error:
+
+                st.error(
+                    f"Could not start Gemini: {error}"
+                )
 
 
 # -----------------------------
@@ -154,7 +177,9 @@ else:
     )
 
 
+    # -----------------------------
     # Display previous messages
+    # -----------------------------
 
     for message in st.session_state.messages:
 
@@ -167,47 +192,6 @@ else:
             elif message["kind"] == "image":
 
                 st.image(message["content"])
-
-
-    # -----------------------------
-    # Gemini function with retry
-    # -----------------------------
-
-    def ask_gemini(parts):
-
-        max_attempts = 3
-
-        for attempt in range(max_attempts):
-
-            try:
-
-                response = st.session_state.chat.send_message(
-                    parts
-                )
-
-                return response.text
-
-            except Exception as error:
-
-                error_text = str(error)
-
-                # Retry temporary server errors
-                if "503" in error_text or "UNAVAILABLE" in error_text:
-
-                    if attempt < max_attempts - 1:
-
-                        time.sleep(3)
-
-                        continue
-
-                    return (
-                        "Gemini is temporarily experiencing high demand. "
-                        "Please wait a moment and try again."
-                    )
-
-                return (
-                    f"Sorry, something went wrong: {error}"
-                )
 
 
     # -----------------------------
@@ -302,7 +286,9 @@ else:
 
         if parts:
 
-            answer = ask_gemini(parts)
+            with st.spinner("Snap & Study is thinking..."):
+
+                answer = ask_gemini(parts)
 
             st.session_state.messages.append(
                 {
